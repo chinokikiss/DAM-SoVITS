@@ -1,0 +1,20 @@
+data:
+  max_eval_sample: 8
+  max_sec: 54
+  num_workers: 1
+  pad_val: 1024 # same with EOS in model
+model:
+  embedding_dim: 512
+  hidden_dim: 512
+  head: 8
+  n_layer: 12
+  dropout: 0.0
+  audio_vocab_size: 1027
+  output_vocab_size: 1024
+  phoneme_vocab_size: 513
+  SEP: 512
+  EOS: 1024
+  MASK: 1025
+  CLS: 1026
+inference:
+  top_k: 5
