@@ -101,8 +101,17 @@ class Text2SemanticEncoder(nn.Module):
         mask_ratio = random.uniform(self.min_mask_ratio, self.max_mask_ratio)
 
         indices = torch.arange(y.size(1), device=device).unsqueeze(0)
-        y_mask = (indices >= y1_lens.unsqueeze(1)+1) & (indices < y_lens.unsqueeze(1)-1)
-        y_mask = torch.bernoulli(torch.full(y_mask.shape, mask_ratio, device=device) * y_mask).bool()
+        valid_mask = (indices >= y1_lens.unsqueeze(1)+1) & (indices < y_lens.unsqueeze(1)-1)
+        y_mask = torch.bernoulli(torch.full(valid_mask.shape, mask_ratio, device=device) * valid_mask).bool()
+
+        # 确保至少有一个被mask
+        no_mask_rows = ~y_mask.any(dim=1)
+        if no_mask_rows.any():
+            for i in torch.where(no_mask_rows)[0]:
+                valid_indices = torch.where(valid_mask[i])[0]
+                if len(valid_indices) > 0:
+                    random_idx = valid_indices[torch.randint(len(valid_indices), (1,))]
+                    y_mask[i, random_idx] = True
 
         y_target = y.clone()
 
