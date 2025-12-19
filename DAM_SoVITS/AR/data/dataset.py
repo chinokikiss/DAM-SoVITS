@@ -1,17 +1,9 @@
-# modified from https://github.com/yangdongchao/SoundStorm/blob/master/soundstorm/s1/AR/data/dataset.py
-# reference: https://github.com/lifeiteng/vall-e
-
-# sys.path.append("/data/docker/liujing04/gpt-vits/mq-vits-s1bert_no_bert")
 import os
 from typing import Dict, List
 import random
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
-
-version = os.environ.get("version", None)
-
-# from config import exp_dir
 
 
 def batch_sequences(sequences: List[np.array], axis: int = 0, pad_value: int = 0):
@@ -113,6 +105,7 @@ class Text2SemanticDataset(Dataset):
         
         self.data = data
 
+        print()
         print("数据长度:", self.__len__())
         print("说话人数量:", len(self.speaker_idx))
         print()
