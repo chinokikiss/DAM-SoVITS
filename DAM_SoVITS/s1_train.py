@@ -80,7 +80,7 @@ class my_model_ckpt(ModelCheckpoint):
             if self._every_n_epochs >= 1 and (trainer.current_epoch + 1) % self._every_n_epochs == 0:
                 if (
                     self.if_save_latest == True
-                ):  ####如果设置只保存最后一个ckpt，在保存下一个ckpt后要清理掉之前的所有ckpt
+                ):
                     to_clean = list(os.listdir(self.dirpath))
                 self._save_topk_checkpoint(trainer, monitor_candidates)
                 if self.if_save_latest == True:
@@ -111,9 +111,7 @@ class my_model_ckpt(ModelCheckpoint):
             self._save_last_checkpoint(trainer, monitor_candidates)
 
 
-def main(args):
-    config = load_yaml_config(args.config_file)
-
+def main(config):
     output_dir = Path(config["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -161,7 +159,6 @@ def main(args):
     )
 
     try:
-        # 使用正则表达式匹配文件名中的数字部分，并按数字大小进行排序
         newest_ckpt_name = get_newest_ckpt(os.listdir(ckpt_dir))
         ckpt_path = ckpt_dir / newest_ckpt_name
     except Exception:
@@ -182,6 +179,58 @@ if __name__ == "__main__":
         help="path of config file",
     )
 
+    parser.add_argument("--pretrained_s1", type=str, default="")
+    parser.add_argument("--data_path", type=str)
+    parser.add_argument("--output_dir", type=str, default="train")
+    parser.add_argument("--seed", type=int, default=1234)
+    parser.add_argument("--epochs", type=int, default=15)
+    parser.add_argument("--batch_size", type=int, default=8)
+    parser.add_argument("--gradient_accumulation", type=int, default=1)
+    parser.add_argument("--save_every_n_epoch", type=int, default=5)
+    parser.add_argument("--precision", type=str, default="16")
+    parser.add_argument("--gradient_clip", type=float, default=1.0)
+    parser.add_argument("--min_mask_ratio", type=float, default=0.1)
+    parser.add_argument("--max_mask_ratio", type=float, default=1.0)
+    parser.add_argument("--duration_loss_weight", type=float, default=0.2)
+    parser.add_argument("--if_save_latest", type=bool, default=True)
+    parser.add_argument("--if_save_every_weights", type=bool, default=True)
+    parser.add_argument("--half_weights_save_dir", type=str, default="weights")
+    parser.add_argument("--exp_name", type=str, default="dam")
+
+    parser.add_argument("--lr", type=float, default=0.01)
+    parser.add_argument("--lr_init", type=float, default=0.00001)
+    parser.add_argument("--lr_end", type=float, default=0.0001)
+    parser.add_argument("--warmup_steps", type=int, default=2000)
+    parser.add_argument("--decay_steps", type=int, default=40000)
+
     args = parser.parse_args()
     logging.info(str(args))
-    main(args)
+    config = load_yaml_config(args.config_file)
+
+    if args.pretrained_s1 is not None:
+        config['pretrained_s1'] = args.pretrained_s1
+    if args.data_path is not None:
+        config['data_path'] = args.data_path
+    if args.output_dir is not None:
+        config['output_dir'] = args.output_dir
+
+    train_args = [
+        'seed', 'epochs', 'batch_size', 'gradient_accumulation',
+        'save_every_n_epoch', 'precision', 'gradient_clip',
+        'min_mask_ratio', 'max_mask_ratio', 'duration_loss_weight',
+        'if_save_latest', 'if_save_every_weights', 'half_weights_save_dir', 'exp_name'
+    ]
+    if 'train' not in config: config['train'] = {}
+    for arg_name in train_args:
+        arg_value = getattr(args, arg_name)
+        if arg_value is not None:
+            config['train'][arg_name] = arg_value
+
+    optimizer_args = ['lr', 'lr_init', 'lr_end', 'warmup_steps', 'decay_steps']
+    if 'optimizer' not in config: config['optimizer'] = {}
+    for arg_name in optimizer_args:
+        arg_value = getattr(args, arg_name)
+        if arg_value is not None:
+            config['optimizer'][arg_name] = arg_value
+
+    main(config)
