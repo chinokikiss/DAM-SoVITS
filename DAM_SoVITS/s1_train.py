@@ -1,5 +1,4 @@
 import os
-
 if "_CUDA_VISIBLE_DEVICES" in os.environ:
     os.environ["CUDA_VISIBLE_DEVICES"] = os.environ["_CUDA_VISIBLE_DEVICES"]
 import argparse
@@ -10,11 +9,12 @@ from pathlib import Path
 import time
 import shutil
 import torch
+import matplotlib.pyplot as plt
 from AR.data.data_module import Text2SemanticDataModule
 from AR.models.t2s_lightning_module import Text2SemanticLightningModule
 from AR.utils.io import load_yaml_config
 from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, Callback
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.strategies import DDPStrategy
 
@@ -56,6 +56,49 @@ def get_dist_strategy_and_devices():
         print("No GPU detected, using CPU mode.")
         return 1, "auto", "cpu"
 
+class TrainingPlotCallback(Callback):
+    def __init__(self, output_dir):
+        super().__init__()
+        self.output_dir = Path(output_dir)
+        self.metrics = {
+            'train_loss': [],
+            'train_acc': [],
+            'epochs': []
+        }
+    
+    def on_train_epoch_end(self, trainer, pl_module):
+        self.metrics['epochs'].append(trainer.current_epoch)
+        for key in trainer.logged_metrics:
+            if key not in self.metrics:
+                self.metrics[key] = []
+            self.metrics[key].append(trainer.logged_metrics[key].item())
+    
+    def on_train_end(self, trainer, pl_module):
+        self.plot_metrics()
+    
+    def plot_metrics(self):
+        fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+        axes = axes.flatten()
+        
+        plot_idx = 0
+        for key, values in self.metrics.items():
+            if key == 'epochs' or len(values) == 0:
+                continue
+            
+            if plot_idx < len(axes):
+                axes[plot_idx].plot(self.metrics['epochs'], values, marker='o')
+                axes[plot_idx].set_xlabel('Epoch')
+                axes[plot_idx].set_ylabel(key)
+                axes[plot_idx].set_title(f'{key} over epochs')
+                axes[plot_idx].grid(True)
+                plot_idx += 1
+        
+        for idx in range(plot_idx, len(axes)):
+            axes[idx].set_visible(False)
+        
+        plt.tight_layout()
+        plt.savefig(self.output_dir / 'training_curves.png', dpi=300)
+        plt.close()
 
 class my_model_ckpt(ModelCheckpoint):
     def __init__(
@@ -132,6 +175,7 @@ def main(config):
         every_n_epochs=config["train"]["save_every_n_epoch"],
         dirpath=ckpt_dir,
     )
+    plot_callback = TrainingPlotCallback(output_dir)
     logger = TensorBoardLogger(name=output_dir.stem, save_dir=output_dir)
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["USE_LIBUV"] = "0"
@@ -147,11 +191,11 @@ def main(config):
         precision=config["train"]["precision"],
         logger=logger,
         num_sanity_val_steps=0,
-        callbacks=[ckpt_callback],
+        callbacks=[ckpt_callback, plot_callback],
         use_distributed_sampler=False,
     )
 
-    model: Text2SemanticLightningModule = Text2SemanticLightningModule(config, output_dir)
+    model: Text2SemanticLightningModule = Text2SemanticLightningModule(config, output_dir, is_train=True)
 
     data_module: Text2SemanticDataModule = Text2SemanticDataModule(
         config,
@@ -187,7 +231,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--gradient_accumulation", type=int, default=1)
     parser.add_argument("--save_every_n_epoch", type=int, default=5)
-    parser.add_argument("--precision", type=str, default="16")
+    parser.add_argument("--precision", type=str, default="16-mixed")
     parser.add_argument("--gradient_clip", type=float, default=1.0)
     parser.add_argument("--min_mask_ratio", type=float, default=0.1)
     parser.add_argument("--max_mask_ratio", type=float, default=1.0)
