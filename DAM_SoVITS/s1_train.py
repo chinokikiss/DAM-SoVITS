@@ -68,7 +68,7 @@ class TrainingPlotCallback(Callback):
         }
     
     def on_train_epoch_end(self, trainer, pl_module):
-        if (time.time()-self.train_timer)/3600 > 0.05:
+        if (time.time()-self.train_timer)/3600 > 11:
             sys.exit()
 
         self.metrics['epochs'].append(trainer.current_epoch)
