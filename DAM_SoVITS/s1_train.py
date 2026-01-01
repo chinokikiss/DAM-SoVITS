@@ -112,6 +112,7 @@ def uploadhf(model_path):
         api.upload_file(
             repo_id=f"{your_username}/{model_repo_name}",
             path_or_fileobj=model_path,
+            path_in_repo=os.path.basename(model_path),
             commit_message=f"Upload {model_repo_name} model files",
             repo_type="model",
         )
