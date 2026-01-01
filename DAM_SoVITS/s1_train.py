@@ -5,11 +5,11 @@ import argparse
 import logging
 import platform
 from pathlib import Path
-import sys
 import time
 import shutil
 import torch
 import matplotlib.pyplot as plt
+from huggingface_hub import login, HfApi
 from AR.data.data_module import Text2SemanticDataModule
 from AR.models.t2s_lightning_module import Text2SemanticLightningModule
 from AR.utils.io import load_yaml_config
@@ -24,6 +24,8 @@ torch.set_float32_matmul_precision("high")
 from collections import OrderedDict
 
 from AR.utils import get_newest_ckpt
+
+HF_TOKEN = ''
 
 def my_save(fea, path):
     dir = os.path.dirname(path)
@@ -60,16 +62,11 @@ class TrainingPlotCallback(Callback):
     def __init__(self, output_dir):
         super().__init__()
         self.output_dir = Path(output_dir)
-        self.train_timer = time.time()
         self.metrics = {
             'train_loss': [],
             'train_acc': [],
             'epochs': []
         }
-    
-    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-        if (time.time()-self.train_timer)/3600 > 0.05:
-            sys.exit()
     
     def on_train_epoch_end(self, trainer, pl_module):
         self.metrics['epochs'].append(trainer.current_epoch)
@@ -104,6 +101,25 @@ class TrainingPlotCallback(Callback):
         plt.tight_layout()
         plt.savefig(self.output_dir / 'training_curves.png', dpi=300)
         plt.close()
+
+
+def uploadhf(model_path):
+    login(HF_TOKEN)
+
+    your_username = "cnmds"
+    model_repo_name = "dasdasda"
+
+    api = HfApi()
+
+    if os.path.exists(model_path):
+        api.upload_folder(
+            repo_id=f"{your_username}/{model_repo_name}",
+            folder_path=model_path,
+            path_in_repo="weights",
+            commit_message=f"Upload {model_repo_name} model files",
+            repo_type="model",
+        )
+
 
 class my_model_ckpt(ModelCheckpoint):
     def __init__(
@@ -147,15 +163,16 @@ class my_model_ckpt(ModelCheckpoint):
                     to_save_od["info"] = "GPT-e%s" % (trainer.current_epoch + 1)
 
                     if os.environ.get("LOCAL_RANK", "0") == "0":
+                        save_path = "%s/%s-e%s.ckpt" % (
+                            self.half_weights_save_dir,
+                            self.exp_name,
+                            trainer.current_epoch + 1,
+                        )
                         my_save(
                             to_save_od,
-                            "%s/%s-e%s.ckpt"
-                            % (
-                                self.half_weights_save_dir,
-                                self.exp_name,
-                                trainer.current_epoch + 1,
-                            ),
+                            save_path,
                         )
+                        uploadhf(save_path)
             self._save_last_checkpoint(trainer, monitor_candidates)
 
 
@@ -245,16 +262,18 @@ if __name__ == "__main__":
     parser.add_argument("--if_save_every_weights", type=bool, default=True)
     parser.add_argument("--half_weights_save_dir", type=str, default="weights")
     parser.add_argument("--exp_name", type=str, default="dam")
-
     parser.add_argument("--lr", type=float, default=0.01)
     parser.add_argument("--lr_init", type=float, default=0.00001)
     parser.add_argument("--lr_end", type=float, default=0.0001)
     parser.add_argument("--warmup_steps", type=int, default=2000)
     parser.add_argument("--decay_steps", type=int, default=40000)
+    parser.add_argument("--hf_token", type=str)
 
     args = parser.parse_args()
     logging.info(str(args))
     config = load_yaml_config(args.config_file)
+
+    HF_TOKEN = args.hf_token
 
     if args.pretrained_s1 is not None:
         config['pretrained_s1'] = args.pretrained_s1
