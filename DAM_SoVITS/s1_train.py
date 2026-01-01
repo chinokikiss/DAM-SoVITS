@@ -109,9 +109,9 @@ def uploadhf(model_path):
     api = HfApi()
 
     if os.path.exists(model_path):
-        api.upload_folder(
+        api.upload_file(
             repo_id=f"{your_username}/{model_repo_name}",
-            folder_path=model_path,
+            path_or_fileobj=model_path,
             path_in_repo="weights",
             commit_message=f"Upload {model_repo_name} model files",
             repo_type="model",
