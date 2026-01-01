@@ -25,7 +25,6 @@ from collections import OrderedDict
 
 from AR.utils import get_newest_ckpt
 
-HF_TOKEN = ''
 
 def my_save(fea, path):
     dir = os.path.dirname(path)
@@ -104,8 +103,6 @@ class TrainingPlotCallback(Callback):
 
 
 def uploadhf(model_path):
-    login(HF_TOKEN)
-
     your_username = "cnmds"
     model_repo_name = "dasdasda"
 
@@ -273,7 +270,7 @@ if __name__ == "__main__":
     logging.info(str(args))
     config = load_yaml_config(args.config_file)
 
-    HF_TOKEN = args.hf_token
+    login(args.hf_token)
 
     if args.pretrained_s1 is not None:
         config['pretrained_s1'] = args.pretrained_s1
